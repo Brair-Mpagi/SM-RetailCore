@@ -1,0 +1,54 @@
+{
+  "name": "rstms-backend",
+  "version": "1.0.0",
+  "description": "Real-Time Sales Tracking and Management System - Backend API",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "db:sync": "node scripts/sync-database.js",
+    "db:sync:alter": "node scripts/sync-database.js --alter",
+    "db:sync:force": "node scripts/sync-database.js --force",
+    "db:init-migrations": "node scripts/init-migrations.js",
+    "migrate": "sequelize-cli db:migrate",
+    "migrate:undo": "sequelize-cli db:migrate:undo",
+    "migrate:status": "sequelize-cli db:migrate:status",
+    "seed": "sequelize-cli db:seed:all",
+    "test": "jest --coverage"
+  },
+  "keywords": [
+    "pos",
+    "inventory",
+    "sales",
+    "retail"
+  ],
+  "author": "Birungi Mackline",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.15.2",
+    "bcryptjs": "^2.4.3",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "helmet": "^7.1.0",
+    "json2csv": "^6.0.0-alpha.2",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.6.5",
+    "node-cron": "^3.0.3",
+    "pdfkit": "^0.14.0",
+    "sequelize": "^6.35.2",
+    "socket.io": "^4.8.3",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.14",
+    "sequelize-cli": "^6.6.2",
+    "supertest": "^6.3.3"
+  }
+}

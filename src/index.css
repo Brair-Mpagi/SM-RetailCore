@@ -1,0 +1,363 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS Custom Properties — Light/Dark Theme ───────────────── */
+:root {
+  /* Light mode (default) */
+  --bg-base:          #f0f4f8;
+  --bg-surface:       #ffffff;
+  --bg-surface-2:     #f8fafc;
+  --bg-surface-3:     #f1f5f9;
+  --border-color:     #e2e8f0;
+  --border-subtle:    #f1f5f9;
+  --text-primary:     #0f172a;
+  --text-secondary:   #475569;
+  --text-muted:       #94a3b8;
+  --text-inverse:     #f9fafb;
+  --shadow-card:      0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-elevated:  0 4px 16px rgba(0,0,0,.10);
+  --glass-blur:       blur(0px);
+}
+
+.dark {
+  /* Dark mode */
+  --bg-base:          #030712;
+  --bg-surface:       rgba(17,24,39,0.85);
+  --bg-surface-2:     rgba(31,41,55,0.60);
+  --bg-surface-3:     rgba(55,65,81,0.30);
+  --border-color:     rgba(55,65,81,0.60);
+  --border-subtle:    rgba(31,41,55,0.50);
+  --text-primary:     #f9fafb;
+  --text-secondary:   #9ca3af;
+  --text-muted:       #6b7280;
+  --text-inverse:     #0f172a;
+  --shadow-card:      0 1px 3px rgba(0,0,0,.40);
+  --shadow-elevated:  0 8px 32px rgba(0,0,0,.50);
+  --glass-blur:       blur(16px);
+}
+
+/* ── Base Styles ───────────────────────────────────────────── */
+@layer base {
+  * { box-sizing: border-box; }
+
+  html { transition: background-color 0.3s ease, color 0.3s ease; }
+
+  body {
+    @apply font-sans antialiased;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-feature-settings: 'cv02','cv03','cv04','cv11';
+  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg-surface-2); }
+  ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  input, select, textarea {
+    color-scheme: light dark;
+  }
+}
+
+/* ── Component Layer ───────────────────────────────────────── */
+@layer components {
+  /* Cards */
+  .glass-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-card);
+    backdrop-filter: var(--glass-blur);
+    @apply rounded-2xl;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .glass-card:hover {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .glass-card-light {
+    background-color: var(--bg-surface-2);
+    border: 1px solid var(--border-subtle);
+    @apply rounded-2xl;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply bg-brand-600 hover:bg-brand-500 text-white font-semibold
+           px-5 py-2.5 rounded-xl transition-all duration-200
+           flex items-center gap-2 shadow-lg shadow-brand-900/30
+           active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply font-medium px-5 py-2.5 rounded-xl
+           transition-all duration-200 flex items-center gap-2
+           active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+    background-color: var(--bg-surface-2);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+  }
+  .btn-secondary:hover {
+    background-color: var(--bg-surface-3);
+    color: var(--text-primary);
+  }
+
+  .btn-danger {
+    @apply font-medium px-5 py-2.5 rounded-xl transition-all duration-200
+           flex items-center gap-2 active:scale-95
+           bg-red-600/20 hover:bg-red-600/30 text-red-500
+           border border-red-500/30;
+  }
+  .dark .btn-danger { @apply text-red-400 border-red-600/30; }
+
+  .btn-success {
+    @apply font-medium px-5 py-2.5 rounded-xl transition-all duration-200
+           flex items-center gap-2 active:scale-95
+           bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-600
+           border border-emerald-500/30;
+  }
+  .dark .btn-success { @apply text-emerald-400; }
+
+  /* Inputs */
+  .input-field {
+    @apply rounded-xl px-4 py-2.5 w-full
+           focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500
+           transition-all duration-200;
+    background-color: var(--bg-surface-2);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+  }
+  .input-field::placeholder { color: var(--text-muted); }
+
+  /* KPI Cards */
+  .kpi-card {
+    @apply glass-card p-5 cursor-default;
+  }
+
+  /* Tables */
+  .table-header {
+    @apply text-xs font-semibold uppercase tracking-wider py-3 px-4 text-left;
+    color: var(--text-muted);
+  }
+  .table-cell {
+    @apply py-3 px-4 text-sm;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  /* Status Pills */
+  .status-pill {
+    @apply text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1;
+  }
+
+  /* Nav Items */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl
+           transition-all duration-200 cursor-pointer text-sm font-medium;
+    color: var(--text-muted);
+  }
+  .nav-item:hover {
+    background-color: var(--bg-surface-3);
+    color: var(--text-primary);
+  }
+  .nav-item-active {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
+           text-brand-500 bg-brand-500/10 border border-brand-500/20
+           dark:text-brand-400 dark:bg-brand-900/30 dark:border-brand-800/40;
+  }
+
+  /* Sidebar label */
+  .sidebar-section-label {
+    @apply text-[10px] font-bold uppercase tracking-widest px-3 mb-1 mt-4;
+    color: var(--text-muted);
+    opacity: 0.6;
+  }
+
+  /* Section Title */
+  .section-title {
+    @apply text-base font-bold flex items-center gap-2;
+    color: var(--text-primary);
+  }
+
+  /* Badge colors */
+  .badge-critical {
+    @apply bg-red-500/15 text-red-500 border border-red-500/30;
+  }
+  .dark .badge-critical { @apply text-red-400; }
+  .badge-warning {
+    @apply bg-amber-500/15 text-amber-600 border border-amber-500/30;
+  }
+  .dark .badge-warning { @apply text-amber-400; }
+  .badge-info {
+    @apply bg-blue-500/15 text-blue-600 border border-blue-500/30;
+  }
+  .dark .badge-info { @apply text-blue-400; }
+  .badge-success {
+    @apply bg-emerald-500/15 text-emerald-600 border border-emerald-500/30;
+  }
+  .dark .badge-success { @apply text-emerald-400; }
+
+  /* Modal overlay */
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(6px);
+  }
+  .modal-panel {
+    @apply glass-card p-6 w-full animate-fade-in;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  /* POS Quick tile */
+  .pos-tile {
+    @apply rounded-xl p-3 text-center cursor-pointer transition-all duration-150
+           active:scale-95 font-medium text-sm border;
+    background-color: var(--bg-surface-2);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+  }
+  .pos-tile:hover {
+    background-color: var(--bg-surface-3);
+    border-color: #14b8a6;
+    @apply shadow-md;
+  }
+  .pos-tile-active {
+    @apply bg-brand-500/15 border-brand-500/50 text-brand-600 dark:text-brand-400;
+  }
+
+  /* Topbar */
+  .topbar {
+    @apply px-4 py-3 flex items-center gap-4 flex-shrink-0;
+    background-color: var(--bg-surface);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  /* Sidebar bg */
+  .sidebar-bg {
+    background-color: var(--bg-surface);
+    border-right: 1px solid var(--border-color);
+  }
+}
+
+/* ── Utilities ──────────────────────────────────────────────── */
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-brand-500 to-teal-400 bg-clip-text text-transparent;
+  }
+  .text-primary { color: var(--text-primary); }
+  .text-secondary { color: var(--text-secondary); }
+  .text-muted { color: var(--text-muted); }
+  .bg-surface { background-color: var(--bg-surface); }
+  .bg-surface-2 { background-color: var(--bg-surface-2); }
+  .border-theme { border-color: var(--border-color); }
+}
+
+/* ── Animations ─────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes ticker {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes scanLine {
+  0%   { top: 10%; }
+  50%  { top: 85%; }
+  100% { top: 10%; }
+}
+@keyframes pulse-ring {
+  0%   { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(20,184,166,0.7); }
+  70%  { transform: scale(1); box-shadow: 0 0 0 10px rgba(20,184,166,0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(20,184,166,0); }
+}
+
+.animate-fade-in { animation: fadeIn 0.3s ease-out; }
+.animate-slide-in { animation: slideIn 0.3s ease-out; }
+.scan-line { animation: scanLine 2.5s ease-in-out infinite; }
+.animate-pulse-ring { animation: pulse-ring 2s infinite; }
+
+/* ── Print ──────────────────────────────────────────────────── */
+@media print {
+  @page {
+    margin: 1cm;
+  }
+
+  body { 
+    background: white !important; 
+    color: black !important; 
+    font-size: 11pt !important;
+  }
+  
+  /* Hide shell UI and interactive buttons */
+  .no-print,
+  .sidebar-bg,
+  .topbar,
+  .print\:hidden { 
+    display: none !important; 
+  }
+
+  /* Override fixed/scrollable containers to prevent cropping. 
+     Do NOT target generic .flex classes here to avoid un-hiding the sidebar. */
+  html, body, #root, #root > div, main, .print-wrapper {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  /* Remove height limits from generic utilities */
+  .h-screen, .overflow-hidden, .overflow-y-auto, .max-h-64, .custom-scrollbar {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Expand main content to full width */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Prevent page breaks inside critical elements */
+  .glass-card, .kpi-card, table, tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Clean up card appearance and reduce padding for paper */
+  .glass-card {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+    margin-bottom: 15px !important;
+    padding: 12px !important;
+    backdrop-filter: none !important;
+  }
+  
+  .kpi-card {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+    backdrop-filter: none !important;
+    padding: 10px !important;
+  }
+
+  /* Scale down oversized text and tables */
+  table {
+    font-size: 10pt !important;
+  }
+  .text-2xl { font-size: 16pt !important; }
+  .text-xl { font-size: 14pt !important; }
+
+  /* Specifically force the signature section to display if requested */
+  .print\:block {
+    display: block !important;
+  }
+}
