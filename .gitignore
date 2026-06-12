@@ -52,10 +52,10 @@ Thumbs.db
 .frontend.pid
 
 # Database
-*.sql
-*.db
-*.sqlite
-*.sqlite3
+# *.sql
+# *.db
+# *.sqlite
+# *.sqlite3
 
 # Backup files
 *.bak
