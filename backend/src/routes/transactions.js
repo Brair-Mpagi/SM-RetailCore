@@ -9,10 +9,14 @@ const {
   voidTransactionValidation,
   receiptNumberValidation
 } = require('../validators/transaction');
+const { transactionRateLimiter, voidRefundRateLimiter } = require('../middleware/rateLimiter');
+const { transactionIdempotency } = require('../middleware/idempotency');
 
-// Create sale transaction (with validation)
+// Create sale transaction (with validation, rate limiting, and idempotency)
 router.post('/', 
-  authenticate, 
+  authenticate,
+  transactionRateLimiter,
+  transactionIdempotency,
   createSaleValidation,
   validateRequest,
   transactionsController.createSale
@@ -40,14 +44,16 @@ router.get('/receipt/:receiptNumber',
   transactionsController.getByReceiptNumber
 );
 
-// Void transaction (manager only, with validation)
+// Void transaction (manager only, with validation and rate limiting)
 router.post('/:id/void', 
   authenticate, 
   authorize(['manager']),
+  voidRefundRateLimiter,
   voidTransactionValidation,
   validateRequest,
   transactionsController.voidTransaction
 );
 
 module.exports = router;
+
 

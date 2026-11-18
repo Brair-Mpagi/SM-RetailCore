@@ -1,7 +1,9 @@
 const { User, AuditLog } = require('../models');
 const { generateToken, generateRefreshToken } = require('../middleware/auth');
+const redisService = require('../services/redis');
+const logger = require('../utils/logger');
 
-// Login
+// Login with enhanced security
 exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -17,6 +19,7 @@ exports.login = async (req, res, next) => {
     const user = await User.findOne({ where: { email } });
 
     if (!user) {
+      logger.logAuth('login_failed_user_not_found', { email, ip: req.ip });
       return res.status(401).json({ 
         error: 'Invalid credentials', 
         code: 401 
@@ -24,17 +27,31 @@ exports.login = async (req, res, next) => {
     }
 
     // Check if account is locked
-    if (user.failed_attempts >= parseInt(process.env.MAX_LOGIN_ATTEMPTS || 5)) {
+    const maxAttempts = parseInt(process.env.MAX_LOGIN_ATTEMPTS || 5);
+    if (user.failed_attempts >= maxAttempts) {
+      logger.logSecurity('login_attempt_locked_account', { 
+        user_id: user.id,
+        email,
+        failed_attempts: user.failed_attempts,
+        ip: req.ip 
+      });
       return res.status(423).json({ 
-        error: 'Account locked. Please see manager.', 
+        error: 'Account locked due to too many failed attempts. Please contact manager.', 
         code: 423 
       });
     }
 
     // Check if account is active
     if (!user.is_active || user.is_deleted) {
+      logger.logSecurity('login_attempt_inactive_account', { 
+        user_id: user.id,
+        email,
+        is_active: user.is_active,
+        is_deleted: user.is_deleted,
+        ip: req.ip 
+      });
       return res.status(401).json({ 
-        error: 'Account locked. Please see manager.', 
+        error: 'Account inactive. Please contact manager.', 
         code: 401 
       });
     }
@@ -44,19 +61,36 @@ exports.login = async (req, res, next) => {
 
     if (!isValid) {
       // Increment failed attempts
-      await user.update({ 
-        failed_attempts: user.failed_attempts + 1 
-      });
+      const newFailedAttempts = user.failed_attempts + 1;
+      await user.update({ failed_attempts: newFailedAttempts });
 
       // Log failed attempt
+      logger.logAuth('login_failed_invalid_password', { 
+        user_id: user.id,
+        email,
+        failed_attempts: newFailedAttempts,
+        ip: req.ip 
+      });
+
       await AuditLog.create({
         user_id: user.id,
         action: 'login_failed',
         entity_type: 'user',
         entity_id: user.id,
         ip_address: req.ip,
-        meta: { email }
+        meta: { email, reason: 'invalid_password' }
       });
+
+      // Warn if approaching lockout
+      const remainingAttempts = maxAttempts - newFailedAttempts;
+      if (remainingAttempts > 0 && remainingAttempts <= 2) {
+        return res.status(401).json({ 
+          error: 'Invalid credentials', 
+          code: 401,
+          remaining_attempts: remainingAttempts,
+          warning: `Account will be locked after ${remainingAttempts} more failed attempt(s)`
+        });
+      }
 
       return res.status(401).json({ 
         error: 'Invalid credentials', 
@@ -67,34 +101,70 @@ exports.login = async (req, res, next) => {
     // Reset failed attempts on successful login
     await user.update({ failed_attempts: 0 });
 
-    // Generate tokens
-    const token = generateToken(user);
-    const refreshToken = generateRefreshToken(user);
+    // Generate session ID
+    const sessionId = `session_${user.id}_${Date.now()}`;
+
+    // Generate tokens with session tracking
+    const token = generateToken(user, sessionId);
+    const refreshToken = generateRefreshToken(user, sessionId);
+
+    // Track tokens in Redis for revocation capability
+    await redisService.trackUserToken(user.id, token, 8 * 60 * 60); // 8 hours
 
     // Log successful login
+    logger.logAuth('login_success', { 
+      user_id: user.id,
+      email: user.email,
+      role: user.role,
+      session_id: sessionId,
+      ip: req.ip 
+    });
+
     await AuditLog.create({
       user_id: user.id,
       action: 'login_success',
       entity_type: 'user',
       entity_id: user.id,
-      ip_address: req.ip
+      ip_address: req.ip,
+      meta: { session_id: sessionId }
     });
 
     res.json({
       data: {
         user: user.toJSON(),
         token,
-        refreshToken
+        refreshToken,
+        expires_in: 28800, // 8 hours in seconds
+        token_type: 'Bearer'
       }
     });
   } catch (error) {
+    logger.error('Login error:', error);
     next(error);
   }
 };
 
-// Logout
+// Logout with token revocation
 exports.logout = async (req, res, next) => {
   try {
+    const token = req.token; // Set by authenticate middleware
+
+    // Revoke access token
+    if (token) {
+      await redisService.revokeToken(token, 8 * 60 * 60); // 8 hours
+    }
+
+    // Revoke refresh token if provided
+    const { refresh_token } = req.body;
+    if (refresh_token) {
+      await redisService.revokeToken(refresh_token, 7 * 24 * 60 * 60); // 7 days
+    }
+
+    logger.logAuth('logout', { 
+      user_id: req.user.id,
+      ip: req.ip 
+    });
+
     // Log logout
     await AuditLog.create({
       user_id: req.user.id,

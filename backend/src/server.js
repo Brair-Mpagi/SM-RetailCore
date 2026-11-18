@@ -7,6 +7,8 @@ const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 const { sequelize } = require('./models');
+const redisService = require('./services/redis');
+const logger = require('./utils/logger');
 const initShiftAutoClose = require('./cron/shiftAutoClose');
 
 const app = express();
@@ -49,9 +51,11 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('combined'));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// Health check endpoint with Redis status
+app.get('/health', async (req, res) => {
   const posRoom = io.sockets.adapter.rooms.get('pos');
+  const redisHealth = await redisService.healthCheck();
+  
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -59,7 +63,8 @@ app.get('/health', (req, res) => {
     environment: process.env.NODE_ENV,
     websocket: {
       posClients: posRoom ? posRoom.size : 0
-    }
+    },
+    redis: redisHealth
   });
 });
 
@@ -112,16 +117,28 @@ app.use((err, req, res, next) => {
 // Database connection and server start
 const startServer = async () => {
   try {
+    // Connect to database
     await sequelize.authenticate();
-    console.log('✓ Database connection established');
+    logger.info('✓ Database connection established');
 
     const modelCount = Object.keys(sequelize.models).length;
-    console.log(`✓ Loaded ${modelCount} models`);
+    logger.info(`✓ Loaded ${modelCount} models`);
+
+    // Connect to Redis
+    try {
+      await redisService.connect();
+      logger.info('✓ Redis connection established');
+    } catch (redisError) {
+      logger.warn('⚠ Redis connection failed - some features will be degraded:', redisError.message);
+      logger.warn('  - Token revocation will not work');
+      logger.warn('  - Rate limiting will be bypassed');
+      logger.warn('  - Session management will use fallback');
+    }
 
     if (process.env.DB_SYNC === 'true') {
-      console.log('⚠ Running database sync (DB_SYNC=true)...');
+      logger.warn('⚠ Running database sync (DB_SYNC=true)...');
       await sequelize.sync({ alter: false });
-      console.log('✓ Database schema synchronized');
+      logger.info('✓ Database schema synchronized');
     }
 
     // Seed default system settings (safe to run every boot — uses upsert)
@@ -151,9 +168,9 @@ const startServer = async () => {
       for (const s of defaults) {
         await SystemSetting.findOrCreate({ where: { key: s.key }, defaults: s });
       }
-      console.log('✓ System settings seeded');
+      logger.info('✓ System settings seeded');
     } catch (e) {
-      console.warn('⚠ Could not seed system settings:', e.message);
+      logger.warn('⚠ Could not seed system settings:', e.message);
     }
 
     // Initialize cron jobs
@@ -161,32 +178,34 @@ const startServer = async () => {
 
     // ── Use httpServer (not app) so Socket.IO works ──────────────────────
     httpServer.listen(PORT, () => {
-      console.log('─────────────────────────────────────────');
-      console.log(`✓ Server running on port ${PORT}`);
-      console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`✓ API Base URL: http://localhost:${PORT}/api/v1`);
-      console.log(`✓ WebSocket:    ws://localhost:${PORT}`);
-      console.log(`✓ Scanner relay: POST /api/v1/scanner/scan`);
-      console.log('─────────────────────────────────────────');
+      logger.info('─────────────────────────────────────────');
+      logger.info(`✓ Server running on port ${PORT}`);
+      logger.info(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`✓ API Base URL: http://localhost:${PORT}/api/v1`);
+      logger.info(`✓ WebSocket:    ws://localhost:${PORT}`);
+      logger.info(`✓ Scanner relay: POST /api/v1/scanner/scan`);
+      logger.info('─────────────────────────────────────────');
     });
   } catch (error) {
-    console.error('✗ Unable to start server:', error);
+    logger.error('✗ Unable to start server:', error);
     process.exit(1);
   }
 };
 
 // Handle graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, closing server gracefully...');
+  logger.info('SIGTERM received, closing server gracefully...');
   httpServer.close();
   await sequelize.close();
+  await redisService.disconnect();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  console.log('SIGINT received, closing server gracefully...');
+  logger.info('SIGINT received, closing server gracefully...');
   httpServer.close();
   await sequelize.close();
+  await redisService.disconnect();
   process.exit(0);
 });
 
