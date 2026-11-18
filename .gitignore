@@ -1,95 +1,213 @@
+# ================================
 # Dependencies
+# ================================
 node_modules/
 /.pnp
 .pnp.js
+jspm_packages/
 
-# Testing
-/coverage
-
-# Production
-/build
-/dist
-
+# ================================
 # Environment Variables
+# ================================
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 .env.*.local
+backend/.env
+backend/.env.local
+frontend-next/.env.local
 
+# ================================
+# Backend - Node.js/Express
+# ================================
+backend/node_modules/
+backend/coverage/
+backend/dist/
+backend/build/
+backend/*.log
+backend/logs/*.log
+backend/logs/
+
+# ================================
+# Frontend - Next.js
+# ================================
+frontend-next/node_modules/
+frontend-next/.next/
+frontend-next/out/
+frontend-next/build/
+frontend-next/dist/
+frontend-next/.cache/
+frontend-next/*.log
+
+# Old React/Vite Frontend (if still present)
+dist/
+dist-ssr/
+.vite/
+
+# ================================
+# Testing
+# ================================
+/coverage
+backend/coverage/
+frontend-next/coverage/
+*.coverage
+.nyc_output
+junit.xml
+test-results/
+playwright-report/
+cypress/videos/
+cypress/screenshots/
+
+# ================================
 # Logs
+# ================================
+logs/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-*.log
 backend.log
 frontend.log
+combined.log
+error.log
+exceptions.log
+rejections.log
 
-# Editor directories and files
+# ================================
+# Database
+# ================================
+# Uncomment if you want to ignore database files
+# *.sql
+# *.db
+# *.sqlite
+# *.sqlite3
+# Don't ignore migration files
+!backend/src/migrations/*.js
+!backend/src/seeders/*.js
+
+# ================================
+# Redis
+# ================================
+dump.rdb
+appendonly.aof
+*.rdb
+
+# ================================
+# OS Files
+# ================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+.AppleDouble
+.LSOverride
+
+# ================================
+# Editor & IDE
+# ================================
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.sublime-project
+*.sublime-workspace
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+.project
+.classpath
+.settings/
 
-# OS Files
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
-*~
+# ================================
+# Build Artifacts
+# ================================
+/build
+/dist
+*.tsbuildinfo
+tsconfig.tsbuildinfo
 
-# PID files
+# ================================
+# TypeScript
+# ================================
+*.tsbuildinfo
+next-env.d.ts
+
+# ================================
+# Backup & Temp Files
+# ================================
+*.bak
+*.backup
+*.old
+*.tmp
+tmp/
+temp/
+.temp/
+
+# ================================
+# PID Files
+# ================================
 *.pid
 .backend.pid
 .frontend.pid
 
-# Database
-# *.sql
-# *.db
-# *.sqlite
-# *.sqlite3
-
-# Backup files
-*.bak
-*.backup
-*.old
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# Lock files (keep package-lock.json but ignore other locks)
+# ================================
+# Lock Files
+# ================================
+# Keep package-lock.json for consistent installs
 # yarn.lock
 # pnpm-lock.yaml
 
-# TypeScript
-*.tsbuildinfo
+# ================================
+# Cache Directories
+# ================================
+.cache/
+.parcel-cache/
+.turbo/
+.eslintcache
+.stylelintcache
 
-# Build artifacts
-dist-ssr
-*.local
+# ================================
+# Docker
+# ================================
+docker-compose.override.yml
+.dockerignore
 
-# Cache
-.cache
-.parcel-cache
-.vite
-.turbo
+# ================================
+# Certificates & Keys
+# ================================
+*.pem
+*.key
+*.cert
+*.crt
+ssl/
+certs/
 
-# Debug
-.vscode-test
+# ================================
+# Backup & Database Dumps
+# ================================
+backups/
+*.dump
+*.tar.gz
 
-# Reports
-cypress/videos
-cypress/screenshots
-
+# ================================
 # Misc
+# ================================
 .npmrc.local
+.yarnrc.local
+.pnpm-debug.log
+.vercel
+.now

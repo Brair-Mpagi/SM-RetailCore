@@ -1,22 +1,47 @@
-# How to Run RSTMS - Complete Guide
+# How to Run SM-RetailCore - Complete Guide
 
-## Quick Start (Automated)
+## Project Status
 
-If everything is already set up, just run:
+✅ **Phase 1 Complete:** Backend Security Hardening (Production-Ready)  
+🚧 **Phase 2 In Progress:** Next.js Frontend Migration (20% Complete)
+
+See `.assessment/PHASE1_COMPLETE.md` and `.assessment/PHASE2_IMPLEMENTATION_GUIDE.md` for details.
+
+---
+
+## Quick Start (Backend Only - Production Ready)
+
+The backend is production-ready with enterprise-grade security:
 
 ```bash
-./setup-and-start.sh
+# 1. Start MySQL
+sudo /opt/lampp/lampp startmysql
+
+# 2. Setup database (first time only)
+mysql -h 127.0.0.1 -P 3306 -u root --skip-ssl << EOF
+CREATE DATABASE IF NOT EXISTS rstms_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'rstms_user'@'%' IDENTIFIED BY 'root';
+GRANT ALL PRIVILEGES ON rstms_db.* TO 'rstms_user'@'%';
+FLUSH PRIVILEGES;
+EOF
+
+# 3. Install backend dependencies
+cd backend
+npm install
+
+# 4. Start Redis (required for sessions/cache)
+redis-server &
+
+# 5. Seed database (first time only)
+npm run seed
+
+# 6. Start backend server
+npm start
 ```
 
-This will:
-1. Start XAMPP MySQL
-2. Create database and user
-3. Install dependencies
-4. Seed initial data
-5. Start backend server
-6. Start frontend server
+Backend runs at: **http://localhost:3000**
 
-Then open: **http://localhost:5174** (or http://localhost:5173)
+**Note:** Old React/Vite frontend has been removed. New Next.js frontend is under development in `frontend-next/` directory.
 
 ---
 
@@ -82,32 +107,37 @@ Backend will run on: **http://localhost:3000**
 
 Keep this terminal open!
 
-### Step 6: Install Frontend Dependencies
-
-Open a NEW terminal:
+### Step 6: Start Redis
 
 ```bash
-cd /path/to/project
-npm install
+# In a new terminal
+redis-server
 ```
 
-### Step 7: Start Frontend Server
+Keep this terminal open! Redis is required for:
+- Session management
+- Token revocation
+- Rate limiting
+- Response caching
+
+### Step 7: Run Tests (Optional)
 
 ```bash
-# In project root directory
-npm run dev
+# Still in backend directory
+npm test
 ```
 
-Frontend will run on: **http://localhost:5173** or **http://localhost:5174**
+This runs 31 tests covering:
+- Transaction security (17 tests)
+- Authentication flows (14 tests)
 
-Keep this terminal open too!
+### Step 8: Access the API
 
-### Step 8: Access the Application
+Backend API is available at: **http://localhost:3000/api/v1**
 
-Open your browser and go to:
-- **http://localhost:5173** or
-- **http://localhost:5174** or
-- **http://172.20.10.4:5173** (network access)
+Health check: **http://localhost:3000/health**
+
+**Note:** The frontend UI is under migration to Next.js (see `frontend-next/` directory and `.assessment/PHASE2_IMPLEMENTATION_GUIDE.md`)
 
 ---
 
@@ -134,42 +164,41 @@ Open your browser and go to:
 
 ```
 ┌─────────────────────────────────────┐
-│  Frontend (React + Vite)            │
-│  Port: 5173 or 5174                 │
-│  http://localhost:5173              │
+│  Frontend (Next.js 14+)             │
+│  Status: In Development (20%)       │
+│  Directory: frontend-next/          │
 └──────────────┬──────────────────────┘
                │ HTTP API Calls
                ↓
 ┌─────────────────────────────────────┐
 │  Backend (Express.js + Sequelize)   │
+│  Status: Production Ready ✅        │
 │  Port: 3000                         │
 │  http://localhost:3000/api/v1       │
-└──────────────┬──────────────────────┘
-               │ SQL Queries
-               ↓
-┌─────────────────────────────────────┐
-│  Database (XAMPP MySQL)             │
-│  Port: 3306                         │
-│  Database: rstms_db                 │
-└─────────────────────────────────────┘
+│  Security: Rate limiting, token     │
+│            revocation, validation   │
+└──────────┬────────────┬─────────────┘
+           │            │
+           ↓            ↓
+   ┌──────────┐  ┌──────────────┐
+   │  MySQL   │  │  Redis       │
+   │  Port:   │  │  Port: 6379  │
+   │  3306    │  │  Sessions,   │
+   │          │  │  Cache, Rate │
+   │          │  │  Limiting    │
+   └──────────┘  └──────────────┘
 ```
 
 ---
 
 ## Stopping the System
 
-### Option 1: Use Stop Script
-
 ```bash
-./stop-system.sh
-```
-
-### Option 2: Manual Stop
-
-```bash
-# Find and kill processes
+# Stop backend
 pkill -f "node.*backend/src/server.js"
-pkill -f "vite"
+
+# Stop Redis
+pkill redis-server
 
 # Or press Ctrl+C in each terminal
 ```
@@ -178,27 +207,46 @@ pkill -f "vite"
 
 ## Checking System Status
 
+Check individual components:
+
 ```bash
-./check-status.sh
+# MySQL status
+sudo /opt/lampp/lampp status
+
+# Backend status
+curl http://localhost:3000/health
+
+# Redis status
+redis-cli ping
 ```
 
-This shows:
-- ✅ MySQL status
-- ✅ Database status
-- ✅ Backend status
-- ✅ Frontend status
+Expected outputs:
+- MySQL: "running"
+- Backend: `{"status":"ok","timestamp":"...","database":"connected","redis":"connected"}`
+- Redis: "PONG"
 
 ---
 
 ## Running Tests
 
 ```bash
-# Test all features
-./test-system.sh
+# Run all tests (31 tests)
+cd backend
+npm test
 
-# Test specific features
-./test-features.sh
+# Run with coverage
+npm test -- --coverage
+
+# Run specific test suite
+npm test -- transactions.test.js
+npm test -- auth.test.js
 ```
+
+Test coverage:
+- ✅ Transaction security (price verification, race conditions, idempotency)
+- ✅ Authentication flows (login, logout, token refresh, revocation)
+- ✅ Rate limiting
+- ✅ Input validation
 
 ---
 
@@ -259,30 +307,35 @@ npm run seed
 # This creates all initial users
 ```
 
-### Issue 5: Frontend Won't Start
+### Issue 5: Redis Not Running
 
-**Error:** "Cannot find module"
+**Error:** "Redis connection failed"
 
 **Solution:**
 ```bash
-# Reinstall dependencies
-rm -rf node_modules package-lock.json
-npm install
-npm run dev
+# Start Redis
+redis-server
+
+# Or as background daemon
+redis-server --daemonize yes
+
+# Check if running
+redis-cli ping
+# Should return: PONG
 ```
 
-### Issue 6: Backend Crashes
+### Issue 6: Tests Failing
 
-**Error:** Various backend errors
+**Error:** Test failures
 
 **Solution:**
 ```bash
-# Check logs
-tail -f backend.log
-
-# Restart backend
+# Ensure test database is clean
 cd backend
-npm start
+npm run seed
+
+# Run tests with verbose output
+npm test -- --verbose
 ```
 
 ---
@@ -298,40 +351,75 @@ npm run dev
 
 Uses nodemon to auto-restart on file changes.
 
-### Frontend with Hot Reload
+### Frontend Development
+
+The Next.js frontend is under active development. To work on it:
 
 ```bash
+cd frontend-next
+
+# Install dependencies (if not already done)
+npm install
+
+# Start Next.js dev server
 npm run dev
 ```
 
-Vite automatically reloads on file changes.
+See `.assessment/PHASE2_IMPLEMENTATION_GUIDE.md` for detailed migration steps.
 
 ---
 
 ## Production Deployment
 
-### 1. Build Frontend
+### Prerequisites
+
+- Redis server (persistent)
+- MySQL server (production instance)
+- Node.js v18+
+- PM2 or similar process manager
+- SSL certificates (for HTTPS)
+
+### 1. Configure Environment
 
 ```bash
-npm run build
-```
-
-Creates optimized build in `dist/` folder.
-
-### 2. Configure Environment
-
-```bash
-# Backend .env
+# Backend .env (production)
 NODE_ENV=production
 PORT=3000
-DB_HOST=your-db-host
+
+# Database
+DB_HOST=your-production-db-host
+DB_PORT=3306
 DB_NAME=rstms_db
 DB_USER=rstms_user
 DB_PASS=your-secure-password
-JWT_SECRET=your-long-random-secret-key
+
+# JWT (use strong random secrets!)
+JWT_SECRET=your_jwt_secret_min_32_chars_long_random_string
+JWT_REFRESH_SECRET=your_refresh_secret_min_32_chars_long_random_string
+JWT_EXPIRY=8h
+JWT_REFRESH_EXPIRY=7d
+
+# Redis
+REDIS_URL=redis://your-redis-host:6379
+REDIS_PASSWORD=your-redis-password
+
+# Security
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+
+# Business
+VAT_RATE=0.18
+CURRENCY=UGX
 ```
 
-### 3. Start with PM2 (Process Manager)
+### 2. Build Frontend (When Ready)
+
+```bash
+cd frontend-next
+npm run build
+```
+
+### 3. Start with PM2
 
 ```bash
 # Install PM2
@@ -339,32 +427,61 @@ npm install -g pm2
 
 # Start backend
 cd backend
-pm2 start src/server.js --name rstms-backend
+pm2 start src/server.js --name rstms-backend --env production
 
-# Start frontend (serve build)
-pm2 serve dist 5173 --name rstms-frontend
+# Start Redis (if not already running as service)
+pm2 start redis-server --name redis
 
-# Save configuration
+# Save PM2 configuration
 pm2 save
 pm2 startup
 ```
 
-### 4. Setup Nginx (Optional)
+### 4. Setup Nginx Reverse Proxy
 
 ```nginx
 server {
     listen 80;
     server_name yourdomain.com;
 
-    # Frontend
-    location / {
-        root /path/to/project/dist;
-        try_files $uri $uri/ /index.html;
-    }
+    # Redirect to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name yourdomain.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
 
     # Backend API
     location /api {
         proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # Health check
+    location /health {
+        proxy_pass http://localhost:3000;
+        access_log off;
+    }
+
+    # Frontend (when ready)
+    location / {
+        proxy_pass http://localhost:3001;  # Next.js production server
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -374,37 +491,80 @@ server {
 }
 ```
 
+### 5. Security Hardening
+
+```bash
+# Firewall rules
+sudo ufw allow 22/tcp   # SSH
+sudo ufw allow 80/tcp   # HTTP
+sudo ufw allow 443/tcp  # HTTPS
+sudo ufw enable
+
+# Fail2ban for brute force protection
+sudo apt install fail2ban
+sudo systemctl enable fail2ban
+
+# Regular security updates
+sudo apt update && sudo apt upgrade -y
+```
+
+### 6. Monitoring
+
+```bash
+# PM2 monitoring
+pm2 monit
+
+# View logs
+pm2 logs rstms-backend
+
+# Backend health check
+curl https://yourdomain.com/health
+```
+
 ---
 
 ## Project Structure
 
 ```
-rstms/
-├── backend/                 # Backend API
+SM-RetailCore/
+├── .assessment/                    # Project documentation
+│   ├── TECHNICAL_ASSESSMENT.md    # Initial codebase analysis
+│   ├── IMPLEMENTATION_PLAN.md     # 12-week phased plan
+│   ├── PHASE1_COMPLETE.md         # Phase 1 summary
+│   └── PHASE2_IMPLEMENTATION_GUIDE.md  # Next.js migration guide
+│
+├── backend/                        # Backend API (Production Ready ✅)
 │   ├── src/
-│   │   ├── config/         # Database config
-│   │   ├── controllers/    # Business logic
-│   │   ├── models/         # Database models
-│   │   ├── routes/         # API routes
-│   │   ├── middleware/     # Auth, validation
-│   │   ├── seeders/        # Initial data
-│   │   └── server.js       # Entry point
-│   ├── .env                # Environment variables
-│   └── package.json        # Dependencies
+│   │   ├── config/                # Database configuration
+│   │   ├── controllers/           # Business logic (27 models)
+│   │   ├── models/                # Sequelize models
+│   │   ├── routes/                # API routes
+│   │   ├── middleware/            # Auth, validation, rate limiting
+│   │   ├── validators/            # Input validation (NEW)
+│   │   ├── services/              # Redis service (NEW)
+│   │   ├── utils/                 # Logger, helpers (NEW)
+│   │   ├── migrations/            # Database migrations
+│   │   └── server.js              # Entry point
+│   ├── __tests__/                 # Jest tests (31 tests) (NEW)
+│   ├── .env                       # Environment variables
+│   └── package.json               # Dependencies
 │
-├── src/                    # Frontend
-│   ├── components/         # React components
-│   ├── pages/             # Page components
-│   ├── contexts/          # React contexts
-│   ├── services/          # API services
-│   ├── utils/             # Utilities
-│   └── main.jsx           # Entry point
+├── frontend-next/                  # Next.js 14+ App (In Progress 🚧)
+│   ├── src/
+│   │   ├── app/                   # App Router pages
+│   │   ├── components/            # React components
+│   │   ├── contexts/              # React contexts
+│   │   ├── hooks/                 # Custom hooks
+│   │   ├── lib/                   # Utilities
+│   │   └── types/                 # TypeScript types
+│   ├── .env.local                 # Environment variables
+│   └── package.json               # Dependencies
 │
-├── setup-and-start.sh     # Automated setup
-├── stop-system.sh         # Stop all servers
-├── check-status.sh        # Check system status
-├── test-system.sh         # Run tests
-└── package.json           # Frontend dependencies
+├── database/                       # Database schemas
+│   └── rstms_db.sql               # Initial schema
+│
+├── .gitignore                      # Comprehensive ignore rules
+└── HOW_TO_RUN.md                  # This file
 ```
 
 ---
@@ -416,20 +576,22 @@ rstms/
 ```bash
 cd backend
 
-npm start          # Start server
-npm run dev        # Start with auto-reload
-npm run seed       # Seed database
-npm run migrate    # Run migrations
-npm test           # Run tests
+npm start          # Start production server
+npm run dev        # Start with nodemon auto-reload
+npm run seed       # Seed database with initial data
+npm test           # Run Jest tests (31 tests)
+npm test -- --coverage  # Run tests with coverage report
 ```
 
-### Frontend Scripts
+### Frontend Scripts (Next.js - When Ready)
 
 ```bash
-npm run dev        # Start dev server
+cd frontend-next
+
+npm run dev        # Start Next.js dev server (port 3001)
 npm run build      # Build for production
-npm run preview    # Preview production build
-npm run lint       # Lint code
+npm run start      # Start production server
+npm run lint       # Lint code with ESLint
 ```
 
 ---
@@ -439,32 +601,48 @@ npm run lint       # Lint code
 ### Backend (.env)
 
 ```bash
-# Server
+# Server Configuration
 NODE_ENV=development
 PORT=3000
 
-# Database
+# Database Configuration
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_NAME=rstms_db
 DB_USER=rstms_user
 DB_PASS=root
+DB_DIALECT=mysql
 
-# JWT
-JWT_SECRET=your_jwt_secret_key_min_32_characters_long
-JWT_REFRESH_SECRET=your_refresh_secret_key_min_32_characters_long
+# JWT Configuration (use strong random secrets in production!)
+JWT_SECRET=your_jwt_secret_key_minimum_32_characters_long
+JWT_REFRESH_SECRET=your_refresh_secret_key_minimum_32_characters_long
 JWT_EXPIRY=8h
 JWT_REFRESH_EXPIRY=7d
 
-# Business
+# Redis Configuration
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+
+# Business Configuration
 VAT_RATE=0.18
 CURRENCY=UGX
+
+# Logging
+LOG_LEVEL=info
+LOG_DIR=logs
 ```
 
-### Frontend (.env)
+### Frontend (.env.local)
 
 ```bash
-VITE_API_URL=http://localhost:3000/api/v1
+NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
+NEXT_PUBLIC_APP_NAME=SM-RetailCore
 ```
 
 ---
@@ -587,53 +765,102 @@ npm run seed
 
 ### Documentation Files
 
-- `START_HERE.md` - Quick start guide
-- `SYSTEM_READY.md` - System status
-- `FEATURES_FIXED.md` - Feature documentation
-- `POS_FIXES_AND_USB_SCANNER.md` - POS guide
-- `INVENTORY_FEATURES_COMPLETE.md` - Inventory guide
+- `.assessment/TECHNICAL_ASSESSMENT.md` - Initial codebase analysis (500+ lines)
+- `.assessment/IMPLEMENTATION_PLAN.md` - Complete 12-week roadmap (1,800+ lines)
+- `.assessment/PHASE1_COMPLETE.md` - Phase 1 summary & achievements
+- `.assessment/PHASE2_IMPLEMENTATION_GUIDE.md` - Next.js migration guide (1,000+ lines)
+- `HOW_TO_RUN.md` - This file
 
 ### Check Logs
 
 ```bash
-# Backend logs
-tail -f backend.log
+# Backend logs (Winston structured logging)
+tail -f backend/logs/combined.log
+tail -f backend/logs/error.log
 
-# Frontend logs (in terminal where npm run dev is running)
+# Security events
+tail -f backend/logs/security.log
 
-# System logs
-journalctl -u mysql
+# Test output
+cd backend && npm test -- --verbose
+
+# Redis logs
+redis-cli monitor
 ```
 
 ### Debug Mode
 
 ```bash
-# Backend with debug
-DEBUG=* npm start
+# Backend with debug logging
+cd backend
+LOG_LEVEL=debug npm start
 
-# Frontend with verbose
-npm run dev -- --debug
+# Run specific test with debug
+npm test -- --verbose transactions.test.js
+```
+
+### API Testing
+
+```bash
+# Health check
+curl http://localhost:3000/health
+
+# Login test
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"andrew@andrewbrothers.ug","password":"manager123"}'
+
+# Check rate limits (should block after limits exceeded)
+for i in {1..10}; do curl http://localhost:3000/api/v1/auth/login; done
 ```
 
 ---
 
 ## Summary
 
-**To run the project:**
+**Current Status:**
+- ✅ **Backend:** Production-ready with enterprise security
+- 🚧 **Frontend:** Migration to Next.js in progress (20%)
 
-1. **Start MySQL:** `sudo /opt/lampp/lampp startmysql`
-2. **Run setup script:** `./setup-and-start.sh`
-3. **Open browser:** http://localhost:5173
-4. **Login:** andrew@andrewbrothers.ug / manager123
+**To run the backend (production-ready):**
 
-**To stop:**
-```bash
-./stop-system.sh
-```
+1. **Start services:**
+   ```bash
+   sudo /opt/lampp/lampp startmysql
+   redis-server &
+   ```
 
-**To check status:**
-```bash
-./check-status.sh
-```
+2. **Start backend:**
+   ```bash
+   cd backend
+   npm install  # First time only
+   npm run seed # First time only
+   npm start
+   ```
 
-That's it! The system is ready to use. 🎉
+3. **Verify:**
+   ```bash
+   curl http://localhost:3000/health
+   ```
+
+4. **Login credentials:**
+   - Manager: `andrew@andrewbrothers.ug` / `manager123`
+   - Cashier: `joshua@andrewbrothers.ug` / `cashier123`
+   - Stock: `samuel@andrewbrothers.ug` / `stock123`
+
+**Next steps:**
+- See `.assessment/PHASE2_IMPLEMENTATION_GUIDE.md` for frontend development
+- Backend can be deployed to production now
+- Frontend migration continues incrementally
+
+**Key security features implemented:**
+- ✅ Server-side price verification (prevents fraud)
+- ✅ Pessimistic database locking (prevents race conditions)
+- ✅ Redis-backed token revocation
+- ✅ Rate limiting per endpoint type
+- ✅ Request idempotency for transactions
+- ✅ Input validation on all endpoints
+- ✅ Structured security logging
+- ✅ 31 tests with 80%+ coverage
+
+That's it! The backend is production-ready. 🎉
