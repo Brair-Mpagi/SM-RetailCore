@@ -1,9 +1,19 @@
 const { SalesTransaction, SaleItem, Product, Inventory, StockMovement, Alert, CashSession, User, sequelize } = require('../models');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
 
-// Create sale (ATOMIC transaction)
+// Create sale (ATOMIC transaction with enhanced security)
 exports.createSale = async (req, res, next) => {
+  const startTime = Date.now();
   const t = await sequelize.transaction();
+  
+  logger.logTransaction('create_sale_attempt', {
+    cashier_id: req.user.id,
+    items_count: req.body.items?.length,
+    total_amount: req.body.total_amount,
+    payment_method: req.body.payment_method,
+    ip: req.ip
+  });
   
   try {
     const { 
@@ -21,7 +31,22 @@ exports.createSale = async (req, res, next) => {
 
     if (!items || items.length === 0) {
       await t.rollback();
+      logger.logSecurity('sale_rejected_no_items', {
+        cashier_id: req.user.id,
+        ip: req.ip
+      });
       return res.status(400).json({ error: 'No items in transaction', code: 400 });
+    }
+
+    // Validate items array length to prevent DoS
+    if (items.length > 1000) {
+      await t.rollback();
+      logger.logSecurity('sale_rejected_too_many_items', {
+        cashier_id: req.user.id,
+        items_count: items.length,
+        ip: req.ip
+      });
+      return res.status(400).json({ error: 'Transaction exceeds maximum 1000 items', code: 400 });
     }
 
     // Get or create active cash session for this cashier
@@ -49,26 +74,59 @@ exports.createSale = async (req, res, next) => {
       }
     }
 
-    // Validate and process items
+    // Validate and process items with row-level locking to prevent race conditions
     const saleItems = [];
-    let hasStockWarning = false;
+    let serverCalculatedSubtotal = 0;
+    
     for (const item of items) {
-      const product = await Product.findByPk(item.product_id, { transaction: t });
+      // Lock product and inventory rows to prevent concurrent modifications
+      const product = await Product.findByPk(item.product_id, { 
+        transaction: t,
+        lock: t.LOCK.UPDATE  // Pessimistic locking
+      });
       
       if (!product) {
         await t.rollback();
+        logger.logSecurity('sale_rejected_invalid_product', {
+          cashier_id: req.user.id,
+          product_id: item.product_id,
+          ip: req.ip
+        });
         return res.status(404).json({ error: `Product ${item.product_id} not found`, code: 404 });
+      }
+
+      if (!product.is_active || product.is_deleted) {
+        await t.rollback();
+        logger.logSecurity('sale_rejected_inactive_product', {
+          cashier_id: req.user.id,
+          product_id: item.product_id,
+          product_name: product.name,
+          ip: req.ip
+        });
+        return res.status(400).json({ 
+          error: `Product ${product.name} is not available for sale`, 
+          code: 400 
+        });
       }
 
       const inventory = await Inventory.findOne({ 
         where: { product_id: product.id }, 
-        transaction: t 
+        transaction: t,
+        lock: t.LOCK.UPDATE  // Lock inventory row
       });
 
       // Check stock only for positive quantities (not returns/refunds)
       if (item.quantity > 0) {
         if (!inventory || inventory.quantity_on_hand < item.quantity) {
           await t.rollback();
+          logger.logTransaction('sale_rejected_insufficient_stock', {
+            cashier_id: req.user.id,
+            product_id: product.id,
+            product_name: product.name,
+            available: inventory?.quantity_on_hand || 0,
+            requested: item.quantity,
+            ip: req.ip
+          });
           return res.status(400).json({ 
             error: `Insufficient stock for ${product.name}. Available: ${inventory?.quantity_on_hand || 0}, Requested: ${item.quantity}`, 
             code: 400 
@@ -76,12 +134,99 @@ exports.createSale = async (req, res, next) => {
         }
       }
 
+      // CRITICAL SECURITY: Use server-side authoritative price, not client-submitted price
+      const authoritativePrice = product.unit_price;
+      const calculatedSubtotal = authoritativePrice * item.quantity;
+      
+      // Verify client submitted correct price (within 0.01 tolerance for rounding)
+      if (Math.abs(parseFloat(item.unit_price) - authoritativePrice) > 0.01) {
+        await t.rollback();
+        logger.logSecurity('sale_rejected_price_tampering', {
+          cashier_id: req.user.id,
+          product_id: product.id,
+          product_name: product.name,
+          submitted_price: item.unit_price,
+          authoritative_price: authoritativePrice,
+          ip: req.ip
+        });
+        return res.status(400).json({ 
+          error: `Price mismatch for ${product.name}. Please refresh and try again.`, 
+          code: 400 
+        });
+      }
+
+      // Verify subtotal calculation
+      if (Math.abs(parseFloat(item.subtotal) - calculatedSubtotal) > 0.01) {
+        await t.rollback();
+        logger.logSecurity('sale_rejected_subtotal_tampering', {
+          cashier_id: req.user.id,
+          product_id: product.id,
+          submitted_subtotal: item.subtotal,
+          calculated_subtotal: calculatedSubtotal,
+          ip: req.ip
+        });
+        return res.status(400).json({ 
+          error: `Calculation error for ${product.name}. Please refresh and try again.`, 
+          code: 400 
+        });
+      }
+
+      serverCalculatedSubtotal += calculatedSubtotal;
+
       saleItems.push({
         product_id: product.id,
         quantity: item.quantity,
-        unit_price: item.unit_price,
+        unit_price: authoritativePrice,  // Use authoritative price
         cost_price: product.cost_price || 0,
-        subtotal: item.subtotal
+        subtotal: calculatedSubtotal  // Use server-calculated subtotal
+      });
+    }
+
+    // Verify total amounts server-side
+    const expectedTaxRate = 0.18; // TODO: Get from SystemSetting
+    const expectedTax = Math.round(serverCalculatedSubtotal * expectedTaxRate * 100) / 100;
+    const expectedTotal = serverCalculatedSubtotal + expectedTax;
+
+    // Check submitted totals match server calculations (within 1 UGX tolerance)
+    if (Math.abs(parseFloat(subtotal || 0) - serverCalculatedSubtotal) > 1) {
+      await t.rollback();
+      logger.logSecurity('sale_rejected_subtotal_mismatch', {
+        cashier_id: req.user.id,
+        submitted: subtotal,
+        calculated: serverCalculatedSubtotal,
+        ip: req.ip
+      });
+      return res.status(400).json({ 
+        error: 'Subtotal mismatch. Please refresh and try again.', 
+        code: 400 
+      });
+    }
+
+    if (Math.abs(parseFloat(tax_amount) - expectedTax) > 1) {
+      await t.rollback();
+      logger.logSecurity('sale_rejected_tax_mismatch', {
+        cashier_id: req.user.id,
+        submitted: tax_amount,
+        calculated: expectedTax,
+        ip: req.ip
+      });
+      return res.status(400).json({ 
+        error: 'Tax calculation mismatch. Please refresh and try again.', 
+        code: 400 
+      });
+    }
+
+    if (Math.abs(parseFloat(total_amount) - expectedTotal) > 1) {
+      await t.rollback();
+      logger.logSecurity('sale_rejected_total_mismatch', {
+        cashier_id: req.user.id,
+        submitted: total_amount,
+        calculated: expectedTotal,
+        ip: req.ip
+      });
+      return res.status(400).json({ 
+        error: 'Total amount mismatch. Please refresh and try again.', 
+        code: 400 
       });
     }
 
@@ -183,11 +328,23 @@ exports.createSale = async (req, res, next) => {
 
     await t.commit();
 
+    const responseTime = Date.now() - startTime;
+
+    logger.logTransaction('sale_completed', {
+      cashier_id: req.user.id,
+      receipt_number: transaction.receipt_number,
+      total_amount: transaction.total_amount,
+      items_count: saleItems.length,
+      payment_method: transaction.payment_method,
+      response_time: responseTime,
+      ip: req.ip
+    });
+
     // Add subtotal to response for frontend
     const responseData = {
       ...transaction.toJSON(),
       items: saleItems,
-      subtotal: subtotal || saleItems.reduce((sum, item) => sum + Number(item.subtotal), 0)
+      subtotal: serverCalculatedSubtotal
     };
 
     res.status(201).json({
@@ -195,7 +352,13 @@ exports.createSale = async (req, res, next) => {
     });
   } catch (error) {
     await t.rollback();
-    console.error('Create sale error:', error);
+    logger.error('Sale creation failed', {
+      error: error.message,
+      stack: error.stack,
+      cashier_id: req.user?.id,
+      items_count: req.body.items?.length,
+      ip: req.ip
+    });
     next(error);
   }
 };
