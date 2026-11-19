@@ -6,9 +6,11 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { authAPI } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { Lock, Mail, ShoppingCart } from 'lucide-react';
+import axios from 'axios';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,11 +23,39 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Basic validation
+    if (!formData.email || !formData.password) {
+      toast.error('Please enter both email and password');
+      return;
+    }
+
+    if (!formData.email.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const response = await authAPI.login(formData.email, formData.password);
-      const { user, accessToken, refreshToken } = response.data;
+      const response = await axios.post(`${API_URL}/auth/login`, {
+        email: formData.email,
+        password: formData.password,
+      }, {
+        timeout: 10000, // 10 second timeout
+      });
+
+      // Backend returns: { data: { user, token, refreshToken } }
+      const responseData = response.data;
+      const data = responseData.data || responseData;
+      
+      const user = data.user;
+      const accessToken = data.token;
+      const refreshToken = data.refreshToken;
+
+      if (!user || !accessToken) {
+        throw new Error('Login failed. Please try again.');
+      }
 
       setUser(user);
       setTokens(accessToken, refreshToken);
@@ -33,14 +63,45 @@ export default function LoginPage() {
       toast.success(`Welcome back, ${user.name}!`);
       
       // Redirect based on role
-      if (user.role === 'cashier') {
-        router.push('/pos');
-      } else {
-        router.push('/dashboard');
-      }
+      setTimeout(() => {
+        const redirectPath = user.role === 'cashier' ? '/pos' : '/dashboard';
+        router.push(redirectPath);
+      }, 100);
+      
     } catch (error: any) {
       console.error('Login error:', error);
-      toast.error(error.response?.data?.error || 'Invalid credentials');
+      
+      // Handle different types of errors
+      let errorMessage = 'Login failed. Please try again.';
+      
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        errorMessage = 'Connection timeout. Please check if the backend is running.';
+      } else if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+        errorMessage = 'Cannot connect to server. Please ensure the backend is running on port 3000.';
+      } else if (error.response) {
+        // Server responded with error
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        if (status === 401) {
+          errorMessage = data.error || 'Invalid email or password. Please try again.';
+          
+          // Show remaining attempts if provided
+          if (data.remaining_attempts !== undefined) {
+            errorMessage += ` (${data.remaining_attempts} attempts remaining)`;
+          }
+        } else if (status === 423) {
+          errorMessage = 'Account locked due to too many failed attempts. Please contact your manager.';
+        } else if (status === 400) {
+          errorMessage = data.error || 'Invalid request. Please check your input.';
+        } else if (status === 500) {
+          errorMessage = 'Server error. Please try again later or contact support.';
+        } else {
+          errorMessage = data.error || data.message || `Error: ${status}. Please try again.`;
+        }
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -77,6 +138,7 @@ export default function LoginPage() {
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
                   disabled={loading}
+                  autoComplete="email"
                 />
               </div>
             </div>
@@ -96,6 +158,7 @@ export default function LoginPage() {
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   required
                   disabled={loading}
+                  autoComplete="current-password"
                 />
               </div>
             </div>
@@ -104,26 +167,6 @@ export default function LoginPage() {
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <p className="text-sm text-gray-600 text-center">
-              Demo Accounts
-            </p>
-            <div className="mt-3 space-y-2 text-xs text-gray-500">
-              <div className="flex justify-between">
-                <span>Manager:</span>
-                <span className="font-mono">andrew@andrewbrothers.ug</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Cashier:</span>
-                <span className="font-mono">joshua@andrewbrothers.ug</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Password:</span>
-                <span className="font-mono">manager123 / cashier123</span>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

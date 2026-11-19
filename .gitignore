@@ -1,4 +1,15 @@
 # ================================
+# Temporary & Documentation Files
+# ================================
+temp/
+.temp/
+tmp/
+*.tmp
+*.bak
+*.backup
+*.old
+
+# ================================
 # Dependencies
 # ================================
 node_modules/
@@ -152,10 +163,6 @@ next-env.d.ts
 *.bak
 *.backup
 *.old
-*.tmp
-tmp/
-temp/
-.temp/
 
 # ================================
 # PID Files
